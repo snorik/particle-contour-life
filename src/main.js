@@ -949,7 +949,8 @@ async function start() {
   function mousePosition(e) {
     const rect = canvas.getBoundingClientRect();
     mouse.x = clamp((e.clientX - rect.left) / rect.width, 0, 1) * worldW;
-    mouse.y = clamp((e.clientY - rect.top) / rect.height, 0, 1) * worldH;
+    const y = clamp((e.clientY - rect.top) / rect.height, 0, 1);
+    mouse.y = (options.mode === "particles" ? y : 1 - y) * worldH;
     mouse.repel = e.button === 2 || e.buttons === 2 || e.shiftKey;
     mouse.active = true;
   }
