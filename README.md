@@ -1,37 +1,40 @@
 # Particle Contour Life
 
-Интерактивная симуляция Particle Life с асимметричной матрицей взаимодействий.
+An interactive Particle Life simulation with asymmetric interactions and layered contour visualization.
 
-## Запуск
+## Getting started
 
-Рекомендуется Node.js 22 (он также используется в GitHub Actions). Установите зависимости командой `npm install`, затем запустите `npm run dev`. Команда `npm run build` собирает проект в `dist`, а `npm run preview` запускает предварительный просмотр сборки.
+Requires Node.js 22 and a browser and device with WebGPU support. WebGPU requires a secure context such as HTTPS or localhost; WebGL is not used.
 
-## Стек и устройство
+```sh
+npm install
+npm run dev
+```
 
-JavaScript ES modules, Vite 6 и Three.js 0.187.0. Физика, отрисовка частиц, поля плотности, контуры и постобработка работают на WebGPU с материалами и вычислительными шейдерами TSL. Нужен браузер и устройство с поддержкой WebGPU; WebGL не используется.
+Use `npm run build` to create a production build and `npm run preview` to serve it locally.
 
-Позиции и типы частиц передаются из вычислительных буферов непосредственно в рендеринг. Состояние считывается на CPU только для операций, которым нужен снимок: экспорта, изменения числа или типов частиц и добавления частиц. Поиск соседей использует периодическую сетку на GPU со связанными списками без фиксированного ограничения ёмкости ячейки. Число операций зависит от локальной плотности: в плотном скоплении оно может приблизиться к перебору всех пар. Доступно до 10 000 частиц; производительность зависит от GPU, радиуса и распределения частиц. Необязательный режим Fast dense cells ограничивает проверку 64 частицами на ячейку: это ускоряет плотные скопления, но меняет силы и динамику; выбор частиц зависит от порядка построения сетки.
+## Simulation
 
-Экспериментальный режим **Barnes–Hut** строит на GPU дерево из пяти уровней и агрегирует число частиц и среднюю позицию отдельно для каждого типа. Близкие частицы и области, пересекающие границы участков закона силы, рассчитываются по отдельности; удалённые группы могут заменяться центром. Результат приближённый и зависит от распределения. Из-за построения дерева он не обязательно быстрее сетки при текущем пределе частиц. Два приближённых режима взаимоисключающие и по умолчанию выключены.
+Particle physics, rendering, density fields, contours, and post-processing run on the GPU using Three.js, WebGPU, and TSL. Particle positions and types are passed directly from compute buffers to rendering. State is read back to the CPU only for operations such as exporting or changing particles.
 
-Ползунок Barnes–Hut approximation регулирует допуск на замену группы её центром: большее значение позволяет чаще использовать приближение и может ускорить расчёт, но увеличивает погрешность. Значение по умолчанию — 0,5, как и в предыдущих версиях.
+The default neighbor search uses a periodic GPU grid with linked lists and no fixed cell capacity. Performance depends on the interaction radius and particle distribution; dense clusters can approach all-pairs complexity. The simulation supports up to 10,000 particles. **Fast dense cells**, enabled by default, limits checks to 64 particles per cell. This can improve performance but changes the forces and dynamics, and the selected particles depend on grid construction order.
 
-Для проверки вычислений откройте `/tests/gpu-check.html` на запущенном сервере в браузере с WebGPU: тест сравнивает несколько шагов с CPU, проверяет границы, малые сетки, плотные ячейки, приближённое дерево, чтение состояния и изменение размера мира.
+The experimental **adaptive grid** subdivides dense cells. The experimental **Barnes–Hut** mode builds a five-level tree on the GPU and aggregates particle counts and positions by type. Nearby particles and regions crossing force-law boundaries are evaluated individually, while suitable distant groups can be approximated by their centers. Higher Barnes–Hut approximation values allow more aggregation at the cost of accuracy. Tree construction has a cost, so this mode is not always faster than the grid.
 
-Частота физики выбирается в настройках: 60, 120 или 240 шагов на секунду симуляции. По умолчанию используется 120; более крупный шаг снижает нагрузку, но меняет точность и динамику. При загрузке старой конфигурации без этого параметра сохраняется прежняя частота 240. Разрешение поля контуров также настраивается от 33% до 100% размеров окна; поле сглаживается и увеличивается билинейной фильтрацией. Меньшее разрешение сокращает работу с полем, но может сгладить мелкие детали.
+Particles experience increasing repulsion near the edges; particles that cross an edge wrap to the opposite side.
 
-Масштаб основного рендера можно выбрать отдельно от разрешения поля. Auto ограничивает плотность рендеринга значением 1×, снижая нагрузку на Retina и других экранах высокой плотности; доступны также 1×, 1,5× и физическое разрешение экрана. Более высокое разрешение повышает чёткость и нагрузку на GPU.
+## Performance and quality
 
-## Измерение производительности
+- Physics can run at 60, 120, or 240 steps per simulated second. Lower rates reduce work but change accuracy and dynamics.
+- Contour field resolution ranges from 33% to 100% of the window size. The field is smoothed and sampled with bilinear filtering.
+- Render resolution can be set independently to Auto, 1×, 1.5×, or the display's native resolution. Auto caps the pixel ratio at 1×.
 
-Откройте приложение с параметром `?profile` и консоль разработчика. Примерно раз в секунду в ней появляются GPU-тайминги в миллисекундах: `compute` — вычислительные проходы, `render` — проходы отрисовки. Это длительность последнего измеренного кадра, а не среднее; из-за асинхронного чтения значения могут относиться к разным кадрам. При отсутствии шагов физики вместо `compute` выводится `no simulation steps`. Поддержка WebGPU timestamp queries зависит от браузера и устройства; если она недоступна, в консоли появится сообщение. Профилирование добавляет накладные расходы, поэтому итоговый FPS сравнивайте и без параметра `?profile`.
+The `?profile` query parameter enables GPU timing output in the developer console when timestamp queries are supported. `compute` and `render` report the latest measured durations in milliseconds, not averages; asynchronous readback can make them refer to different frames. Profiling adds overhead, so compare FPS without it as well.
 
-Сравните одинаковую сцену в режиме паузы и при работе, а также режимы частиц и контуров. Для сравнимых результатов используйте одинаковые размеры окна и настройки и дождитесь, пока частицы соберутся в скопления.
+## GPU checks
 
-## Публикация на GitHub Pages
+The `/tests/gpu-check.html` page compares GPU simulation steps with a CPU reference and checks boundaries, small grids, dense cells, Barnes–Hut, state readback, and world resizing. It requires a running server and a WebGPU-capable browser.
 
-1. Создайте репозиторий на GitHub и загрузите исходники в ветку `main`.
-2. В настройках репозитория откройте **Settings → Pages** и выберите **GitHub Actions** в разделе Build and deployment.
-3. Workflow `.github/workflows/deploy.yml` проверит и соберёт проект, затем опубликует его. Адрес сайта отображается в настройках Pages; для обычного репозитория он имеет вид `https://<username>.github.io/<repository>/`.
+## Deployment
 
-Сборка использует относительные пути к ресурсам и подходит как для корня домена, так и для подпапки репозитория. Для локальной проверки production-сборки выполните `npm run build`, затем `npm run preview`. WebGPU требует поддерживающий его браузер и защищённый контекст (HTTPS или localhost).
+The GitHub Actions workflow builds and deploys the `main` branch to GitHub Pages. The Vite build uses relative asset paths and works both at a domain root and under a repository subpath.
