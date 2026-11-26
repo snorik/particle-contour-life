@@ -67,8 +67,16 @@
         </div>
       </div>
       <div class="toolbar">
-        <div class="headbadge">Particles <strong id="numTop">—</strong></div>
-        <div class="headbadge">Types <strong id="typesTop">—</strong></div>
+        <div class="headbadge">
+          <span class="badge-label-full">Particles</span
+          ><span class="badge-label-short" aria-hidden="true">P</span>
+          <strong id="numTop">—</strong>
+        </div>
+        <div class="headbadge">
+          <span class="badge-label-full">Types</span
+          ><span class="badge-label-short" aria-hidden="true">T</span>
+          <strong id="typesTop">—</strong>
+        </div>
         <div class="headbadge">FPS <strong id="fpsTop">—</strong></div>
         <button
           id="playBtn"
@@ -430,9 +438,12 @@
       </div>
     </aside>
     <div id="bottomHelp">
-      <b>Left click / touch</b> — attract · <b>Right click / Shift</b> —
-      repel<br /><b>Double click</b> — add particles · <b>Space</b> — pause ·
-      <b>R</b> — randomize forces
+      <span class="help-desktop">
+        <b>Left click</b> — attract · <b>Right click / Shift</b> — repel<br />
+        <b>Double click</b> — add particles · <b>Space</b> — pause · <b>R</b> —
+        randomize forces
+      </span>
+      <span class="help-touch"><b>Touch and hold</b> — attract particles</span>
     </div>
     <div id="toast" role="status"></div>
     <input id="fileInput" type="file" accept="application/json,.json" />

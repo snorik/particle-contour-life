@@ -90,7 +90,14 @@ async function start() {
       });
     return editQueue;
   }
-  const mouse = { x: 0, y: 0, down: false, repel: false, active: false };
+  const mouse = {
+    x: 0,
+    y: 0,
+    down: false,
+    repel: false,
+    active: false,
+    touch: false,
+  };
 
   const canvas = $("stage");
   const profiling = new URLSearchParams(window.location.search).has("profile");
@@ -947,8 +954,13 @@ async function start() {
     mouse.active = true;
   }
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+  // iOS can otherwise start its long-press callout and cancel the pointer.
+  canvas.addEventListener("touchstart", (e) => e.preventDefault(), {
+    passive: false,
+  });
   canvas.addEventListener("pointerdown", (e) => {
     mousePosition(e);
+    mouse.touch = e.pointerType === "touch";
     mouse.down = true;
     canvas.setPointerCapture(e.pointerId);
   });
@@ -1043,7 +1055,13 @@ async function start() {
               gpuSimulation.setMatrix(matrix);
               physicsMatrixDirty = false;
             }
-            const strength = mouse.down ? (mouse.repel ? -7 : 7) : 0;
+            const strength = mouse.down
+              ? mouse.repel
+                ? -7
+                : mouse.touch
+                  ? 14
+                  : 7
+              : 0;
             if (
               mouse.x !== lastPointerX ||
               mouse.y !== lastPointerY ||
