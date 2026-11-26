@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#faf5ef" />
+    <style>
+      html {
+        background: #faf5ef;
+      }
+      body.loading > :not(#loader):not(#error):not(script) {
+        visibility: hidden;
+      }
+      #loader {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: grid;
+        place-content: center;
+        justify-items: center;
+        gap: 18px;
+        background: #faf5ef;
+        color: #9b7155;
+        font:
+          500 12px system-ui,
+          sans-serif;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+      #loader::before {
+        content: "";
+        width: 30px;
+        height: 30px;
+        border: 2px solid #efdfd2;
+        border-top-color: #d27c42;
+        border-radius: 50%;
+        animation: loader-spin 0.8s linear infinite;
+      }
+      @keyframes loader-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #loader::before {
+          animation: none;
+        }
+      }
+    </style>
+    <title>Particle × Contour Life</title>
+  </head>
+  <body class="loading">
+    <div id="loader" role="status" aria-live="polite">Preparing simulation</div>
+    <canvas
+      id="stage"
+      aria-label="Asymmetric Particle Life simulation"
+    ></canvas>
+    <div id="shade"></div>
+    <header>
+      <div class="identity">
+        <div class="mark">◈</div>
+        <div>
+          <h1>PARTICLE × CONTOUR LIFE</h1>
+        </div>
+      </div>
+      <div class="toolbar">
+        <div class="headbadge">Particles <strong id="numTop">—</strong></div>
+        <div class="headbadge">Types <strong id="typesTop">—</strong></div>
+        <div class="headbadge">FPS <strong id="fpsTop">—</strong></div>
+        <button
+          id="playBtn"
+          class="tbtn"
+          title="Pause / Space"
+          aria-label="Pause simulation"
+        >
+          Ⅱ</button
+        ><button
+          id="menuBtn"
+          class="tbtn"
+          title="Show or hide panel"
+          aria-label="Show or hide settings"
+          aria-controls="panel"
+        >
+          ☰
+        </button>
+      </div>
+    </header>
+    <aside id="panel">
+      <div class="section">Directional interactions <span>01 / 04</span></div>
+      <div class="intro">
+        The matrix row is <b>the moving type</b>; the column is
+        <b>the other type</b>. <b class="positive">+1</b> attracts and
+        <b class="negative">−1</b> repels. <b>A → B</b> can differ from
+        <b>B → A</b>.
+      </div>
+      <div class="control">
+        <label for="types"
+          >Number of types <output id="typesVal">5</output></label
+        ><input id="types" type="range" min="2" max="12" step="1" value="5" />
+      </div>
+      <div class="buttons">
+        <button class="btn primary" id="randomMatrix">↝ Randomize forces</button
+        ><button class="btn" id="zeroMatrix">Clear matrix</button>
+      </div>
+      <div class="control">
+        <label for="preset">Presets</label
+        ><select class="select" id="preset">
+          <option value="chase">Chase</option>
+          <option value="colonies">Colonies</option>
+          <option value="cycle">Hunting cycle</option>
+          <option value="symbiosis">Symbiosis</option>
+          <option value="partners">Partner colonies</option>
+          <option value="schools">Schools</option>
+          <option value="chains" selected>Food chains</option>
+          <option value="orbit">Orbit</option>
+          <option value="ecosystem">Ecosystem</option>
+          <option value="random">Random</option>
+        </select>
+      </div>
+      <div class="matrix-card">
+        <div id="matrixScroll">
+          <div
+            id="matrix"
+            role="group"
+            aria-label="Directional force matrix"
+          ></div>
+        </div>
+        <div class="legend">
+          <span><i class="dot a"></i> attraction</span
+          ><span><i class="dot r"></i> repulsion</span><span>gray = 0</span>
+        </div>
+        <div class="meditor">
+          <div class="mrow">
+            <span id="pairTitle" class="selectedpair">Type 1 → Type 2</span
+            ><input
+              id="cellNum"
+              class="minput"
+              type="number"
+              min="-1"
+              max="1"
+              step="0.01"
+              value="0.70"
+              aria-label="Selected pair force"
+            />
+          </div>
+          <input
+            id="cellRange"
+            type="range"
+            min="-1"
+            max="1"
+            step="0.01"
+            value="0.70"
+            aria-label="Adjust selected pair force"
+          />
+          <div class="row" style="margin-top: 10px">
+            <button class="btn" id="randomCell" style="flex: 1; padding: 7px">
+              Randomize pair</button
+            ><button class="btn" id="zeroCell" style="padding: 7px 14px">
+              0
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="section">Particle Life physics <span>02 / 04</span></div>
+      <div class="control">
+        <label for="count"
+          >Particle count <output id="countVal">3000</output></label
+        ><input
+          id="count"
+          type="range"
+          min="100"
+          max="10000"
+          step="50"
+          value="3000"
+        />
+      </div>
+      <div class="control">
+        <label for="force"
+          >Interaction strength <output id="forceVal">1.00</output></label
+        ><input
+          id="force"
+          type="range"
+          min="0.10"
+          max="2.50"
+          step="0.05"
+          value="1.00"
+        />
+      </div>
+      <div class="control">
+        <label for="range"
+          >Interaction radius <output id="rangeVal">92</output></label
+        ><input
+          id="range"
+          type="range"
+          min="35"
+          max="160"
+          step="1"
+          value="92"
+        />
+      </div>
+      <div class="control">
+        <label for="beta"
+          >Short-range repulsion β <output id="betaVal">0.28</output></label
+        ><input
+          id="beta"
+          type="range"
+          min="0.10"
+          max="0.55"
+          step="0.01"
+          value="0.28"
+        />
+      </div>
+      <div class="control">
+        <label for="halfLife"
+          >Damping half-life, s <output id="halfLifeVal">0.16</output></label
+        ><input
+          id="halfLife"
+          type="range"
+          min="0.04"
+          max="0.48"
+          step="0.01"
+          value="0.16"
+        />
+      </div>
+      <div class="control">
+        <label for="speed"
+          >Simulation speed <output id="speedVal">0.500</output></label
+        ><input
+          id="speed"
+          type="range"
+          min="0.005"
+          max="2.50"
+          step="0.005"
+          value="0.5"
+        />
+      </div>
+      <div class="control">
+        <label for="physicsHz">Physics steps per simulated second</label>
+        <select id="physicsHz">
+          <option value="60">60 — faster</option>
+          <option value="120" selected>120 — balanced</option>
+          <option value="240">240 — more accurate</option>
+        </select>
+        <div class="mini">Fewer steps can change the simulation dynamics.</div>
+      </div>
+      <label class="switch" for="barnesHut">
+        <span>Barnes–Hut (experimental)</span>
+        <input id="barnesHut" type="checkbox" />
+      </label>
+      <div class="mini">
+        Aggregates distant groups by type; nearby particles remain exact.
+      </div>
+      <div class="control">
+        <label for="barnesHutTheta"
+          >Barnes–Hut approximation
+          <output id="barnesHutThetaVal">0.50</output></label
+        >
+        <input
+          id="barnesHutTheta"
+          type="range"
+          min="0.2"
+          max="1.5"
+          step="0.05"
+          value="0.5"
+        />
+        <div class="mini">
+          Higher values may be faster, with less accurate forces.
+        </div>
+      </div>
+      <label class="switch" for="adaptive">
+        <span>Adaptive grid (experimental)</span>
+        <input id="adaptive" type="checkbox" />
+      </label>
+      <div class="control">
+        <label for="minCellSize"
+          >Minimum cell size <output id="minCellSizeVal">32</output></label
+        >
+        <input
+          id="minCellSize"
+          type="range"
+          min="16"
+          max="180"
+          step="1"
+          value="32"
+        />
+      </div>
+      <div class="mini">
+        Dense cells split until they reach this size or the maximum tree depth.
+        Fast dense limits checks only in the smallest cells.
+      </div>
+      <label class="switch" for="approximate">
+        <span>Fast dense cells (approximate)</span>
+        <input id="approximate" type="checkbox" checked />
+      </label>
+      <div class="mini">
+        Limits checks to 64 particles per cell. Dense interactions become
+        approximate. With adaptive grid, the limit applies only to the smallest
+        cells.
+      </div>
+      <div class="mini">
+        Force depends on distance: particles repel at <b>r &lt; β</b>, follow
+        the matrix at <b>β ≤ r &lt; 1</b>, and exert no force at <b>r ≥ 1</b>.
+        Particles are repelled by the edges; those crossing an edge wrap around.
+      </div>
+      <div class="divider"></div>
+      <div class="section">Contour Life visualization <span>03 / 04</span></div>
+      <div class="control">
+        <label for="mode">Display</label
+        ><select class="select" id="mode">
+          <option value="both">Contours + particles</option>
+          <option value="contours">Contours only</option>
+          <option value="particles">Particles only (Particle Life)</option>
+        </select>
+      </div>
+      <div class="control">
+        <label for="blob"
+          >Membrane radius <output id="blobVal">11</output></label
+        ><input id="blob" type="range" min="10" max="65" step="1" value="11" />
+      </div>
+      <div class="control">
+        <label for="iso"
+          >Boundary threshold <output id="isoVal">0.70</output></label
+        ><input
+          id="iso"
+          type="range"
+          min="0.15"
+          max="1.00"
+          step="0.01"
+          value="0.70"
+        />
+      </div>
+      <div class="control">
+        <label for="renderScale">Render resolution</label>
+        <select id="renderScale">
+          <option value="auto" selected>Auto — up to 1×</option>
+          <option value="1">1×</option>
+          <option value="1.5">1.5×</option>
+          <option value="native">Native display resolution</option>
+        </select>
+        <div class="mini">
+          Higher resolution is sharper but uses more GPU resources.
+        </div>
+      </div>
+      <div class="control">
+        <label for="fieldScale">Contour field resolution</label>
+        <select id="fieldScale">
+          <option value="0.33">33% — faster</option>
+          <option value="0.5">50% — balanced</option>
+          <option value="0.67" selected>67% — detailed</option>
+          <option value="1">100% — full resolution</option>
+        </select>
+        <div class="mini">
+          Lower resolution is faster but softens small details.
+        </div>
+      </div>
+      <div class="control">
+        <label for="smooth"
+          >Membrane smoothing <output id="smoothVal">0.20</output></label
+        ><input
+          id="smooth"
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value="0.20"
+        />
+      </div>
+      <div class="control">
+        <label for="fill"
+          >Fill intensity <output id="fillVal">0.50</output></label
+        ><input
+          id="fill"
+          type="range"
+          min="0"
+          max="1"
+          step="0.05"
+          value="0.50"
+        />
+      </div>
+      <div class="control">
+        <label for="debris"
+          >Water debris <output id="debrisVal">0.45</output></label
+        >
+        <input
+          id="debris"
+          type="range"
+          min="0"
+          max="1"
+          step="0.05"
+          value="0.45"
+        />
+      </div>
+      <div class="control">
+        <label for="inner"
+          >Internal membranes <output id="innerVal">1.00</output></label
+        ><input
+          id="inner"
+          type="range"
+          min="0"
+          max="2"
+          step="0.05"
+          value="1.00"
+        />
+      </div>
+      <div class="mini">
+        <b>Each type has its own field and contour.</b> At overlaps, the
+        strongest field determines the fill while each type keeps its own
+        contour. Fields affect the image only; Particle Life physics remains
+        independent.
+      </div>
+      <div class="divider"></div>
+      <div class="section">Experiment <span>04 / 04</span></div>
+      <div class="buttons">
+        <button class="btn primary" id="resetParticles">
+          ↻ Reset particles</button
+        ><button class="btn" id="scrambleTypes">⇄ Shuffle types</button
+        ><button class="btn" id="exportJSON">↓ Save JSON</button
+        ><button class="btn" id="importJSON">↑ Load JSON</button
+        ><button class="btn" id="savePNG">▧ Save PNG</button
+        ><button class="btn" id="closePanel">Hide panel</button>
+      </div>
+      <div class="mini" style="margin-top: 15px">
+        Matrix changes apply <b>immediately</b>. Random forces are generated
+        independently for each directional pair. JSON saves settings, the
+        matrix, and particle state.
+      </div>
+    </aside>
+    <div id="bottomHelp">
+      <b>Left click / touch</b> — attract · <b>Right click / Shift</b> —
+      repel<br /><b>Double click</b> — add particles · <b>Space</b> — pause ·
+      <b>R</b> — randomize forces
+    </div>
+    <div id="toast" role="status"></div>
+    <input id="fileInput" type="file" accept="application/json,.json" />
+    <div id="error">
+      <h2>Could not start simulation</h2>
+      <p id="errorText"></p>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
