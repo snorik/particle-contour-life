@@ -2,6 +2,8 @@
 
 An interactive Particle Life simulation with asymmetric interactions and layered contour visualization.
 
+Inspired by a video from the [Programming Chaos](https://www.youtube.com/@programmingchaos8957) YouTube channel.
+
 ## Getting started
 
 Requires Node.js 22 and a browser and device with WebGPU support. WebGPU requires a secure context such as HTTPS or localhost; WebGL is not used.
