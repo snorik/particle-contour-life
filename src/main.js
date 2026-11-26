@@ -37,7 +37,7 @@ async function start() {
     barnesHutTheta: 0.5,
     adaptive: false,
     minCellSize: 32,
-    speed: 0.5,
+    speed: 0.25,
     physicsHz: 120,
     fieldScale: 0.67,
     renderScale: "auto",
@@ -1125,7 +1125,7 @@ async function start() {
     }
     requestAnimationFrame(frame);
   }
-  usePreset("chains");
+  usePreset("random");
   resize();
   resetParticles();
   updateUI();
