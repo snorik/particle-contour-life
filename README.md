@@ -38,3 +38,7 @@ The `/tests/gpu-check.html` page compares GPU simulation steps with a CPU refere
 ## Deployment
 
 The GitHub Actions workflow builds and deploys the `main` branch to GitHub Pages. The Vite build uses relative asset paths and works both at a domain root and under a repository subpath.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
