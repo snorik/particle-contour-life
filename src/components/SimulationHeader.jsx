@@ -4,7 +4,7 @@ import { FpsCounter } from "./FpsCounter";
 export function SimulationHeader({ state, opts, engine, open, setOpen, fpsCounter }) {
   return (
     <header className="pointer-events-none fixed inset-x-3 top-3 z-20 flex items-start justify-between gap-2 sm:inset-x-5 sm:top-5">
-      <div className="pointer-events-auto flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-white p-2">
+      <div className="pointer-events-auto flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-white p-2 lg:pr-4">
         <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary text-xl font-bold text-white">
           ◈
         </div>
