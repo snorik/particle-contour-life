@@ -30,7 +30,7 @@ export function createEngine({
   onUpdate,
   onError,
   onFps,
-  scenes,
+  pipeline,
   cameras,
   materials,
   onMeshesChange,
@@ -68,19 +68,12 @@ export function createEngine({
     simTime = 0,
     playing = true;
   let worldW = 1200,
-    worldH = 720,
-    fieldW = 800,
-    fieldH = 480;
+    worldH = 720;
   let pointsField = [],
     pointsDots = [],
     particleMaterials = [];
   let scenePending = false,
     meshRevision = 0;
-  let rawTargets = [],
-    pingTargets = [],
-    pongTargets = [],
-    historyTargets = [],
-    hasHistory = false;
   let gpuSimulation = null;
   let physicsOptionsDirty = true,
     physicsMatrixDirty = true;
@@ -137,36 +130,9 @@ export function createEngine({
     if (options.renderScale === "auto") return Math.min(nativeRatio, 1);
     return Number(options.renderScale);
   }
-  renderer.autoClear = false;
-  renderer.toneMapping = THREE.NoToneMapping;
-  const {
-    field: sceneField,
-    dots: sceneDots,
-    blur: sceneBlur,
-    display: sceneDisplay,
-    particleBackground: sceneParticleBackground,
-    optics: sceneOptics,
-  } = scenes;
-  const { world: worldCamera, quad: quadCamera } = cameras;
-  const {
-    field: fieldMaterial,
-    dots: dotsMaterial,
-    blur: blurMaterial,
-    display: displayMaterial,
-    optics: opticsMaterial,
-    particleBackground: particleBackgroundMaterial,
-  } = materials;
-  let specimenTarget;
-  function target(w, h) {
-    return new THREE.RenderTarget(w, h, {
-      type: THREE.UnsignedByteType,
-      format: THREE.RGBAFormat,
-      minFilter: THREE.LinearFilter,
-      magFilter: THREE.LinearFilter,
-      depthBuffer: false,
-      stencilBuffer: false,
-    });
-  }
+  const { world: worldCamera } = cameras;
+  const { field: fieldMaterial, dots: dotsMaterial, display: displayMaterial } = materials;
+  pipeline.configure(() => ({ options, worldH, simTime }));
   function makeMatrix() {
     physicsMatrixDirty = true;
     const palette = [
@@ -206,7 +172,7 @@ export function createEngine({
     }
     for (let i = 0; i < particles.length; i++) particles[i].t = types[i];
     rebuildGeometry();
-    hasHistory = false;
+    pipeline.resetHistory();
   }
   function randomParticle() {
     return {
@@ -229,7 +195,7 @@ export function createEngine({
     if (particles.length > n) particles.length = n;
     rebuildGeometry();
     updateUI();
-    hasHistory = false;
+    pipeline.resetHistory();
   }
   function rebuildGeometry() {
     scenePending = true;
@@ -287,56 +253,6 @@ export function createEngine({
       if (mesh) mesh.visible = gpuSimulation.state === gpuSimulation.states[i];
     });
   }
-  function render() {
-    if (options.mode === "particles") {
-      renderer.setRenderTarget(null);
-      renderer.render(sceneParticleBackground, quadCamera);
-      dotsMaterial.uniforms.uSize.value = (3.4 * worldH) / window.innerHeight;
-      renderer.render(sceneDots, worldCamera);
-      return;
-    }
-    if (options.mode !== "particles") {
-      fieldMaterial.uniforms.uSize.value = Math.max(2, options.blob * 3);
-      for (let group = 0; group < Math.ceil(options.types / 4); group++) {
-        fieldMaterial.uniforms.uGroup.value = group;
-        renderer.setRenderTarget(rawTargets[group]);
-        renderer.setClearColor(0x000000, 0);
-        renderer.clear(true, true, true);
-        renderer.render(sceneField, worldCamera);
-        const next =
-          historyTargets[group] === pingTargets[group] ? pongTargets[group] : pingTargets[group];
-        blurMaterial.uniforms.uInput.value = rawTargets[group].texture;
-        blurMaterial.uniforms.uOld.value = historyTargets[group].texture;
-        blurMaterial.uniforms.uKeep.value = hasHistory ? options.smooth * 0.79 : 0;
-        blurMaterial.uniforms.uBlur.value = 0.25 + options.smooth * 1.6;
-        renderer.setRenderTarget(next);
-        renderer.clear(true, true, true);
-        renderer.render(sceneBlur, quadCamera);
-        historyTargets[group] = next;
-      }
-      hasHistory = true;
-      displayMaterial.uniforms.uField0.value = historyTargets[0].texture;
-      displayMaterial.uniforms.uField1.value = historyTargets[1].texture;
-      displayMaterial.uniforms.uField2.value = historyTargets[2].texture;
-    }
-    displayMaterial.uniforms.uTime.value = simTime;
-    displayMaterial.uniforms.uIso.value = options.iso;
-    displayMaterial.uniforms.uFill.value = options.fill;
-    displayMaterial.uniforms.uDebris.value = options.debris;
-    displayMaterial.uniforms.uInner.value = options.inner;
-    displayMaterial.uniforms.uMode.value = options.mode === "particles" ? 2 : 0;
-    renderer.setRenderTarget(specimenTarget);
-    renderer.setClearColor(0xffffff, 1);
-    renderer.clear(true, true, true);
-    renderer.render(sceneDisplay, quadCamera);
-    if (options.mode !== "contours") {
-      dotsMaterial.uniforms.uSize.value = (3.4 * worldH) / window.innerHeight;
-      renderer.render(sceneDots, worldCamera);
-    }
-    renderer.setRenderTarget(null);
-    opticsMaterial.uniforms.uEnabled.value = options.eyepiece ? 1 : 0;
-    renderer.render(sceneOptics, quadCamera);
-  }
   function resize() {
     const oldW = worldW,
       oldH = worldH;
@@ -348,11 +264,6 @@ export function createEngine({
     setDpr(pixelRatio);
     renderer.setPixelRatio(pixelRatio);
     renderer.setSize(cw, ch, false);
-    if (specimenTarget) specimenTarget.dispose();
-    specimenTarget = target(canvas.width, canvas.height);
-    opticsMaterial.uniforms.uImage.value = specimenTarget.texture;
-    opticsMaterial.uniforms.uAspect.value = cw / ch;
-    opticsMaterial.uniforms.uPixel.value.set(1 / specimenTarget.width, 1 / specimenTarget.height);
     worldCamera.left = 0;
     worldCamera.right = worldW;
     worldCamera.top = 0;
@@ -367,20 +278,7 @@ export function createEngine({
         p.y = (p.y / oldH) * worldH;
       }
     }
-    resizeField(cw, ch);
-    displayMaterial.uniforms.uAspect.value = cw / ch;
-    particleBackgroundMaterial.uniforms.uAspect.value = cw / ch;
-  }
-  function resizeField(cw, ch) {
-    fieldW = Math.max(1, Math.round(cw * options.fieldScale));
-    fieldH = Math.max(1, Math.round(ch * options.fieldScale));
-    for (const rt of [...rawTargets, ...pingTargets, ...pongTargets]) rt.dispose();
-    rawTargets = Array.from({ length: 3 }, () => target(fieldW, fieldH));
-    pingTargets = Array.from({ length: 3 }, () => target(fieldW, fieldH));
-    pongTargets = Array.from({ length: 3 }, () => target(fieldW, fieldH));
-    historyTargets = [...pingTargets];
-    hasHistory = false;
-    blurMaterial.uniforms.uStep.value.set(1 / fieldW, 1 / fieldH);
+    pipeline.resize(cw, ch, canvas.width, canvas.height);
   }
   function getConfig() {
     return {
@@ -465,7 +363,7 @@ export function createEngine({
           particles = Array.from({ length: options.count }, randomParticle);
         }
         rebuildGeometry();
-        hasHistory = false;
+        pipeline.resetHistory();
         updateUI();
         toast("Configuration loaded");
       } catch (err) {
@@ -502,9 +400,9 @@ export function createEngine({
       options.adaptive = false;
     }
     if ((id === "adaptive" || id === "approximate") && value) options.barnesHut = false;
-    if (["blob", "smooth", "mode"].includes(id)) hasHistory = false;
+    if (["blob", "smooth", "mode"].includes(id)) pipeline.resetHistory();
     if (id === "fieldScale")
-      resizeField(Math.max(1, window.innerWidth), Math.max(1, window.innerHeight));
+      pipeline.resizeField(Math.max(1, window.innerWidth), Math.max(1, window.innerHeight));
     if (id === "renderScale") queueEdit(resize, false);
     updateUI();
   }
@@ -551,7 +449,6 @@ export function createEngine({
       simTime += delta;
     },
     updateActiveBuffers,
-    render,
     fail,
     onFps,
   });
@@ -560,8 +457,8 @@ export function createEngine({
   resetParticles();
   updateUI();
   return {
-    frame: (time) => {
-      if (!scenePending) loop.frame(time);
+    frame: (time, render) => {
+      if (!scenePending) loop.frame(time, render);
     },
     sceneReady: (revision, meshes) => {
       if (revision !== meshRevision || disposed) return;
@@ -610,7 +507,7 @@ export function createEngine({
     importFile,
     savePNG: () => {
       try {
-        render();
+        pipeline.render();
         const link = document.createElement("a");
         link.download = "particle-contour-life.png";
         link.href = canvas.toDataURL("image/png");
@@ -624,8 +521,6 @@ export function createEngine({
       disposed = true;
       gpuSimulation?.dispose();
       for (const material of particleMaterials) material.dispose();
-      for (const rt of [...rawTargets, ...pingTargets, ...pongTargets]) rt.dispose();
-      specimenTarget?.dispose();
     },
   };
 }

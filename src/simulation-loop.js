@@ -13,7 +13,6 @@ export function createSimulationLoop({
   clearPhysicsMatrixDirty,
   advanceTime,
   updateActiveBuffers,
-  render,
   fail,
   onFps = () => {},
 }) {
@@ -26,7 +25,7 @@ export function createSimulationLoop({
   let profilePending = false;
   let profileLastLog = last;
   let profileHasCompute = false;
-  function frame(now) {
+  function frame(now, render) {
     if (stopped) return;
     const STEP = 1 / options.physicsHz;
     const delta = Math.min(0.075, Math.max(0, (now - last) * 0.001));

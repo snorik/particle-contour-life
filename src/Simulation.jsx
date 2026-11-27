@@ -3,6 +3,7 @@ import { createPortal, extend, useFrame, useThree } from "@react-three/fiber/web
 import * as THREE from "three/webgpu";
 import { createEngine } from "./engine";
 import { createMaterials } from "./gpu-materials";
+import { createRenderPipeline } from "./render-pipeline";
 
 extend(THREE);
 
@@ -16,7 +17,7 @@ function FullscreenPass({ material }) {
 }
 
 export function Simulation({ engineRef, onUpdate, onError, onFps }) {
-  const { renderer, setDpr } = useThree();
+  const { renderer, setDpr, size } = useThree();
   const scenes = useMemo(
     () => ({
       field: new THREE.Scene(),
@@ -32,16 +33,24 @@ export function Simulation({ engineRef, onUpdate, onError, onFps }) {
   const worldCamera = useRef(null),
     quadCamera = useRef(null);
   const meshes = useRef({ field: [], dots: [] });
+  const pipelineRef = useRef(null);
   const [particles, setParticles] = useState(null);
   useEffect(() => {
     try {
       if (!renderer.backend.isWebGPUBackend)
         throw new Error("WebGPU is not available on this device.");
+      const pipeline = createRenderPipeline({
+        renderer,
+        scenes,
+        materials,
+        cameras: { world: worldCamera.current, quad: quadCamera.current },
+      });
+      pipelineRef.current = pipeline;
       engineRef.current = createEngine({
         renderer,
         setDpr,
         canvas: renderer.domElement,
-        scenes,
+        pipeline,
         materials,
         cameras: { world: worldCamera.current, quad: quadCamera.current },
         onMeshesChange: setParticles,
@@ -49,17 +58,19 @@ export function Simulation({ engineRef, onUpdate, onError, onFps }) {
         onError,
         onFps,
       });
-      const resize = () => engineRef.current?.resize();
-      window.addEventListener("resize", resize);
       return () => {
-        window.removeEventListener("resize", resize);
         engineRef.current?.dispose();
+        pipeline.dispose();
+        pipelineRef.current = null;
         engineRef.current = null;
       };
     } catch (error) {
       onError(error.message);
     }
   }, [renderer, setDpr, engineRef, onUpdate, onError, onFps, scenes, materials]);
+  useEffect(() => {
+    engineRef.current?.resize();
+  }, [engineRef, size.width, size.height]);
   useEffect(
     () => () => {
       Object.values(materials).forEach((material) => material.dispose());
@@ -69,7 +80,13 @@ export function Simulation({ engineRef, onUpdate, onError, onFps }) {
   useLayoutEffect(() => {
     if (particles) engineRef.current?.sceneReady(particles.revision, meshes.current);
   }, [particles, engineRef]);
-  useFrame(() => engineRef.current?.frame(performance.now()), { phase: "render" });
+  useFrame(
+    () => {
+      const pipeline = pipelineRef.current;
+      if (pipeline) engineRef.current?.frame(performance.now(), pipeline.render);
+    },
+    { phase: "render" },
+  );
   return (
     <>
       <orthographicCamera ref={worldCamera} args={[0, 1200, 0, 720, -2, 2]} position={[0, 0, 1]} />
