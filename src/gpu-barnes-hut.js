@@ -22,14 +22,7 @@ import {
 
 // A complete quadtree, aggregated separately for each particle type. Integer
 // atomic sums use normalized 16-bit positions (safe for the 10,000-particle limit).
-export function createBarnesHut(
-  states,
-  types,
-  integrateParticle,
-  settings,
-  count,
-  shortest,
-) {
+export function createBarnesHut(states, types, integrateParticle, settings, count, shortest) {
   const depthLimit = 5,
     side = 1 << depthLimit,
     nodes = (4 ** (depthLimit + 1) - 1) / 3;
@@ -49,10 +42,7 @@ export function createBarnesHut(
   const build = (source) =>
     Fn(() => {
       const p = source.element(instanceIndex);
-      const normalized = min(
-        max(p.xy.div(settings.world), vec2(0)),
-        vec2(0.999999),
-      );
+      const normalized = min(max(p.xy.div(settings.world), vec2(0)), vec2(0.999999));
       const kind = uint(types.element(instanceIndex).x);
       const x = uint(normalized.x.mul(65535)),
         y = uint(normalized.y.mul(65535));
@@ -91,17 +81,9 @@ export function createBarnesHut(
         const r = distance.div(settings.radius);
         const coefficient = settings.matrix.element(pType.mul(12).add(type));
         const attraction = coefficient.mul(
-          float(1).sub(
-            abs(r.mul(2).sub(1).sub(settings.beta)).div(
-              float(1).sub(settings.beta),
-            ),
-          ),
+          float(1).sub(abs(r.mul(2).sub(1).sub(settings.beta)).div(float(1).sub(settings.beta))),
         );
-        const f = select(
-          r.lessThan(settings.beta),
-          r.div(settings.beta).sub(1),
-          attraction,
-        );
+        const f = select(r.lessThan(settings.beta), r.div(settings.beta).sub(1), attraction);
         acceleration.addAssign(delta.mul(f.mul(mass).div(distance)));
       };
       Loop(
@@ -123,9 +105,7 @@ export function createBarnesHut(
           const size = settings.world.div(float(dim));
           const center = vec2(float(cx).add(0.5), float(cy).add(0.5)).mul(size);
           const deltaCenter = shortest(center.sub(p.xy));
-          const near = length(
-            max(abs(deltaCenter).sub(size.mul(0.5)), vec2(0)),
-          );
+          const near = length(max(abs(deltaCenter).sub(size.mul(0.5)), vec2(0)));
           const far = length(abs(deltaCenter).add(size.mul(0.5)));
           const mid = settings.beta.add(1).mul(0.5).mul(settings.radius);
           const separate = near
@@ -136,11 +116,7 @@ export function createBarnesHut(
             .greaterThan(uint(0))
             .and(level.greaterThan(uint(0)))
             .and(separate)
-            .and(
-              max(size.x, size.y).lessThan(
-                length(deltaCenter).mul(settings.barnesHutTheta),
-              ),
-            );
+            .and(max(size.x, size.y).lessThan(length(deltaCenter).mul(settings.barnesHutTheta)));
           const descend = population
             .greaterThan(uint(0))
             .and(near.lessThan(settings.radius))
@@ -159,12 +135,8 @@ export function createBarnesHut(
                 const base = node.mul(36).add(kind.mul(3));
                 const mass = atomicLoad(aggregates.element(base)).toVar();
                 If(mass.greaterThan(uint(0)), () => {
-                  const sx = atomicLoad(
-                    aggregates.element(base.add(1)),
-                  ).toVar();
-                  const sy = atomicLoad(
-                    aggregates.element(base.add(2)),
-                  ).toVar();
+                  const sx = atomicLoad(aggregates.element(base.add(1))).toVar();
+                  const sy = atomicLoad(aggregates.element(base.add(2))).toVar();
                   const centroid = vec2(float(sx), float(sy))
                     .div(float(mass).mul(65535))
                     .mul(settings.world);
@@ -206,12 +178,7 @@ export function createBarnesHut(
                       .and(d2.greaterThanEqual(0.00001))
                       .and(d2.lessThan(settings.radius.mul(settings.radius))),
                     () => {
-                      applyForce(
-                        delta,
-                        sqrt(d2),
-                        uint(types.element(j).x),
-                        float(1),
-                      );
+                      applyForce(delta, sqrt(d2), uint(types.element(j).x), float(1));
                     },
                   );
                   j.assign(next.element(j));
@@ -259,10 +226,7 @@ export function createBarnesHut(
       If(mouseDistance.greaterThan(1).and(mouseDistance.lessThan(165)), () => {
         const falloff = float(1).sub(mouseDistance.div(165));
         acceleration.addAssign(
-          mouseDelta
-            .div(mouseDistance)
-            .mul(falloff.mul(falloff))
-            .mul(settings.mouseStrength),
+          mouseDelta.div(mouseDistance).mul(falloff.mul(falloff)).mul(settings.mouseStrength),
         );
       });
       integrateParticle(p, acceleration, states[1 - states.indexOf(source)]);

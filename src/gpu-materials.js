@@ -28,11 +28,10 @@ import {
   varying,
 } from "three/tsl";
 
-// Node materials for the density splats, contour composite and lens pass.
+// Node materials for the density splats and contour composite.
 export function createMaterials() {
   const blank = new THREE.Texture();
-  const make = () =>
-    new THREE.MeshBasicNodeMaterial({ depthTest: false, depthWrite: false });
+  const make = () => new THREE.MeshBasicNodeMaterial({ depthTest: false, depthWrite: false });
   const field = new THREE.MeshBasicNodeMaterial({
     transparent: true,
     side: THREE.DoubleSide,
@@ -58,18 +57,7 @@ export function createMaterials() {
   const blur = make();
   const particleBackground = make();
   particleBackground.uniforms = { uAspect: uniform(1) };
-  const bgCoord = uv()
-    .mul(2)
-    .sub(1)
-    .mul(vec2(particleBackground.uniforms.uAspect, 1));
-  const bgVignette = float(1).sub(smoothstep(0.25, 1.8, length(bgCoord)));
-  particleBackground.fragmentNode = vec4(
-    pow(
-      vec3(0.83, 0.91, 0.89).add(vec3(0.1, 0.07, 0.08).mul(bgVignette)),
-      vec3(0.9),
-    ),
-    1,
-  );
+  particleBackground.fragmentNode = vec4(vec3(0.97, 0.98, 1), 1);
   blur.uniforms = {
     uInput: texture(blank),
     uOld: texture(blank),
@@ -115,8 +103,6 @@ export function createMaterials() {
   const d = display.uniforms;
   const hash = (p) => fract(sin(p.dot(vec2(127.1, 311.7))).mul(43758.5453));
   display.fragmentNode = Fn(() => {
-    const pt = coord.mul(2).sub(1).mul(vec2(d.uAspect, 1));
-    const vign = float(1).sub(smoothstep(0.25, 1.8, length(pt)));
     // A little suspended material gives the empty water the texture of a slide.
     const waterCoord = coord.mul(vec2(d.uAspect, 1)).mul(112);
     const grainCell = floor(waterCoord);
@@ -128,19 +114,12 @@ export function createMaterials() {
       .sub(smoothstep(0.035, 0.11, length(grainLocal)))
       .mul(step(0.91, grainSeed));
     const fiber = float(1)
-      .sub(
-        smoothstep(
-          0.035,
-          0.11,
-          length(vec2(grainLocal.x.mul(2.3), grainLocal.y.mul(0.5))),
-        ),
-      )
+      .sub(smoothstep(0.035, 0.11, length(vec2(grainLocal.x.mul(2.3), grainLocal.y.mul(0.5)))))
       .mul(step(0.975, grainSeed));
     const fine = hash(floor(coord.mul(vec2(1100, 800))))
       .sub(0.5)
       .mul(0.009);
-    const col = vec3(0.83, 0.91, 0.89)
-      .add(vec3(0.1, 0.07, 0.08).mul(vign))
+    const col = vec3(0.97, 0.98, 1)
       .sub(
         vec3(0.2, 0.16, 0.11)
           .mul(fleck.add(fiber.mul(0.7)))
@@ -148,11 +127,7 @@ export function createMaterials() {
       )
       .add(fine)
       .toVar();
-    const groups = [
-      d.uField0.sample(coord),
-      d.uField1.sample(coord),
-      d.uField2.sample(coord),
-    ];
+    const groups = [d.uField0.sample(coord), d.uField1.sample(coord), d.uField2.sample(coord)];
     const lineLight = vec3(0).toVar();
     const topColor = vec3(0).toVar();
     const maxInside = float(0).toVar();
@@ -170,9 +145,7 @@ export function createMaterials() {
           exp(density.sub(d.uIso.mul(level)).div(width).pow(2).negate());
         const main = edge(1, ew),
           mid = edge(1.56, max(ew, 0.009));
-        lineLight.addAssign(
-          color.mul(main.mul(0.85).add(d.uInner.mul(mid).mul(0.26))),
-        );
+        lineLight.addAssign(color.mul(main.mul(0.85).add(d.uInner.mul(mid).mul(0.26))));
         const isTop = density.greaterThan(topD),
           isSecond = density.greaterThan(secondD);
         secondD.assign(select(isTop, topD, select(isSecond, density, secondD)));
@@ -187,19 +160,13 @@ export function createMaterials() {
     // Fine stipple appears only inside membranes, like translucent cell contents.
     const cellGrid = coord.mul(vec2(d.uAspect, 1)).mul(265);
     const cellId = floor(cellGrid);
-    const cellLocal = fract(cellGrid).sub(
-      vec2(hash(cellId.add(11)), hash(cellId.add(59))),
-    );
+    const cellLocal = fract(cellGrid).sub(vec2(hash(cellId.add(11)), hash(cellId.add(59))));
     const granule = float(1)
       .sub(smoothstep(0.045, 0.14, length(cellLocal)))
       .mul(step(0.78, hash(cellId.add(23))))
       .mul(maxInside)
       .mul(d.uFill);
-    const texturedFill = mix(
-      fill,
-      topColor.mul(0.56).add(vec3(0.24)),
-      granule.mul(0.24),
-    );
+    const texturedFill = mix(fill, topColor.mul(0.56).add(vec3(0.24)), granule.mul(0.24));
     const delta = topD.sub(secondD),
       interfaceWidth = max(fwidth(delta).mul(1.15), 0.012);
     const interfaceLine = float(1)
@@ -208,11 +175,7 @@ export function createMaterials() {
     lineLight.addAssign(topColor.mul(interfaceLine).mul(d.uInner).mul(0.55));
     // Thin saturated ink over the translucent fills, with independent type edges.
     const inkStrength = clamp(length(lineLight).mul(0.8), 0, 0.86);
-    const inkTint = clamp(
-      lineLight.div(max(length(lineLight), 0.001)).mul(0.68),
-      0,
-      1,
-    );
+    const inkTint = clamp(lineLight.div(max(length(lineLight), 0.001)).mul(0.68), 0, 1);
     const contoured = mix(texturedFill, inkTint, inkStrength);
     col.assign(select(d.uMode.lessThan(1.5), contoured, col));
     const noise = hash(floor(coord.mul(vec2(1200, 800))))
@@ -226,6 +189,7 @@ export function createMaterials() {
     uImage: texture(blank),
     uAspect: uniform(1),
     uPixel: uniform(new THREE.Vector2(1, 1)),
+    uEnabled: uniform(1),
   };
   const o = optics.uniforms,
     p = coord.sub(0.5).mul(vec2(o.uAspect, 1)).div(min(o.uAspect, 1));
@@ -244,17 +208,13 @@ export function createMaterials() {
     center.g,
     o.uImage.sample(coord.sub(offset)).b,
   );
-  const image = mix(chroma, lensBlur, edge.mul(0.55)).mul(
-    float(1).sub(edge.mul(0.16)),
+  const image = mix(chroma, lensBlur, edge.mul(0.55)).mul(float(1).sub(edge.mul(0.16)));
+  const eyepiece = mix(
+    vec3(0.008, 0.009, 0.011),
+    image,
+    float(1).sub(smoothstep(0.68, 0.7, radius)),
   );
-  optics.fragmentNode = vec4(
-    mix(
-      vec3(0.008, 0.009, 0.011),
-      image,
-      float(1).sub(smoothstep(0.68, 0.7, radius)),
-    ),
-    1,
-  );
+  optics.fragmentNode = vec4(select(o.uEnabled.greaterThan(0.5), eyepiece, center), 1);
   return { field, dots, blur, display, optics, particleBackground };
 }
 

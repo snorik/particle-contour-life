@@ -1,14 +1,5 @@
 import { PointsNodeMaterial, Sprite } from "three/webgpu";
-import {
-  float,
-  instanceIndex,
-  length,
-  smoothstep,
-  uniform,
-  uv,
-  vec2,
-  vec3,
-} from "three/tsl";
+import { float, instanceIndex, length, smoothstep, uniform, uv, vec2, vec3 } from "three/tsl";
 
 // A sprite per particle reads positions directly from the simulation's storage buffers.
 // Both buffers have a material so switching ping-pong buffers does not recompile shaders.

@@ -31,18 +31,14 @@ import {
 // Each particle occupies two vec4s: position/velocity and type (x component).
 export function createGpuPhysics(particles, worldWidth, worldHeight) {
   const count = particles.length;
-  if (count === 0)
-    throw new Error("GPU physics requires at least one particle");
+  if (count === 0) throw new Error("GPU physics requires at least one particle");
   const initial = new Float32Array(count * 4);
   const types = new Float32Array(count * 4);
   particles.forEach((p, i) => {
     initial.set([p.x, p.y, p.vx, p.vy], i * 4);
     types[i * 4] = p.t;
   });
-  const states = [
-    instancedArray(initial, "vec4"),
-    instancedArray(initial.slice(), "vec4"),
-  ];
+  const states = [instancedArray(initial, "vec4"), instancedArray(initial.slice(), "vec4")];
   const typeBuffer = instancedArray(types, "vec4");
   // A cell is a linked list in GPU storage; no fixed per-cell capacity is needed.
   const gridSize = 64;
@@ -84,11 +80,7 @@ export function createGpuPhysics(particles, worldWidth, worldHeight) {
       const dimensions = gridDimensions();
       const cell = cellPosition(source.element(instanceIndex), dimensions);
       const bin = uint(cell.y).mul(gridSize).add(uint(cell.x));
-      const previous = atomicFunc(
-        "atomicExchange",
-        heads.element(bin),
-        instanceIndex,
-      ).toVar();
+      const previous = atomicFunc("atomicExchange", heads.element(bin), instanceIndex).toVar();
       next.element(instanceIndex).assign(previous);
     })().compute(count);
   const integrateParticle = (p, acceleration, destination) => {
@@ -96,14 +88,8 @@ export function createGpuPhysics(particles, worldWidth, worldHeight) {
     // The wall force is independent of the particle interaction strength.
     const wallRange = min(settings.world.mul(0.5), vec2(80));
     const nearStart = max(vec2(1).sub(p.xy.div(wallRange)), vec2(0));
-    const nearEnd = max(
-      vec2(1).sub(settings.world.sub(p.xy).div(wallRange)),
-      vec2(0),
-    );
-    const wallAcceleration = nearStart
-      .mul(nearStart)
-      .sub(nearEnd.mul(nearEnd))
-      .mul(1200);
+    const nearEnd = max(vec2(1).sub(settings.world.sub(p.xy).div(wallRange)), vec2(0));
+    const wallAcceleration = nearStart.mul(nearStart).sub(nearEnd.mul(nearEnd)).mul(1200);
     const velocity = p.zw
       .mul(damping)
       .add(acceleration.mul(settings.force.mul(760).mul(settings.dt)))
@@ -112,9 +98,7 @@ export function createGpuPhysics(particles, worldWidth, worldHeight) {
     const speed = length(velocity);
     velocity.mulAssign(min(float(1), float(380).div(max(speed, 0.00001))));
     const position = mod(
-      mod(p.xy.add(velocity.mul(settings.dt)), settings.world).add(
-        settings.world,
-      ),
+      mod(p.xy.add(velocity.mul(settings.dt)), settings.world).add(settings.world),
       settings.world,
     );
     destination.element(instanceIndex).assign(vec4(position, velocity));
@@ -156,71 +140,55 @@ export function createGpuPhysics(particles, worldWidth, worldHeight) {
                 .add(select(ny.greaterThanEqual(3), ny.sub(1), uint(0)))
                 .mod(ny);
               const cellSize = settings.world.div(dimensions);
-              const center = vec2(float(x).add(0.5), float(y).add(0.5)).mul(
-                cellSize,
-              );
-              const nearest = max(
-                abs(shortest(center.sub(p.xy))).sub(cellSize.mul(0.5)),
-                vec2(0),
-              );
-              If(
-                nearest
-                  .dot(nearest)
-                  .lessThan(settings.radius.mul(settings.radius)),
-                () => {
-                  const j = atomicLoad(
-                    heads.element(y.mul(gridSize).add(x)),
-                  ).toVar();
-                  Loop(
-                    {
-                      start: uint(0),
-                      end: uint(settings.maxPerCell),
-                      type: "uint",
-                      name: "item",
-                      condition: "<",
-                    },
-                    () => {
-                      If(j.greaterThanEqual(uint(count)), () => {
-                        Break();
-                      });
-                      const q = source.element(j);
-                      const delta = shortest(q.xy.sub(p.xy));
-                      const distance2 = delta.dot(delta);
-                      If(
-                        j
-                          .notEqual(instanceIndex)
-                          .and(
-                            distance2.lessThan(
-                              settings.radius.mul(settings.radius),
+              const center = vec2(float(x).add(0.5), float(y).add(0.5)).mul(cellSize);
+              const nearest = max(abs(shortest(center.sub(p.xy))).sub(cellSize.mul(0.5)), vec2(0));
+              If(nearest.dot(nearest).lessThan(settings.radius.mul(settings.radius)), () => {
+                const j = atomicLoad(heads.element(y.mul(gridSize).add(x))).toVar();
+                Loop(
+                  {
+                    start: uint(0),
+                    end: uint(settings.maxPerCell),
+                    type: "uint",
+                    name: "item",
+                    condition: "<",
+                  },
+                  () => {
+                    If(j.greaterThanEqual(uint(count)), () => {
+                      Break();
+                    });
+                    const q = source.element(j);
+                    const delta = shortest(q.xy.sub(p.xy));
+                    const distance2 = delta.dot(delta);
+                    If(
+                      j
+                        .notEqual(instanceIndex)
+                        .and(distance2.lessThan(settings.radius.mul(settings.radius)))
+                        .and(distance2.greaterThanEqual(0.00001)),
+                      () => {
+                        const distance = sqrt(distance2);
+                        const r = distance.div(settings.radius);
+                        const coefficient = settings.matrix.element(
+                          pType.mul(12).add(uint(typeBuffer.element(j).x)),
+                        );
+                        const attraction = coefficient.mul(
+                          float(1).sub(
+                            abs(r.mul(2).sub(1).sub(settings.beta)).div(
+                              float(1).sub(settings.beta),
                             ),
-                          )
-                          .and(distance2.greaterThanEqual(0.00001)),
-                        () => {
-                          const distance = sqrt(distance2);
-                          const r = distance.div(settings.radius);
-                          const coefficient = settings.matrix.element(
-                            pType.mul(12).add(uint(typeBuffer.element(j).x)),
-                          );
-                          const attraction = coefficient.mul(
-                            float(1).sub(
-                              abs(r.mul(2).sub(1).sub(settings.beta)).div(
-                                float(1).sub(settings.beta),
-                              ),
-                            ),
-                          );
-                          const f = select(
-                            r.lessThan(settings.beta),
-                            r.div(settings.beta).sub(1),
-                            attraction,
-                          );
-                          acceleration.addAssign(delta.mul(f.div(distance)));
-                        },
-                      );
-                      j.assign(next.element(j));
-                    },
-                  );
-                },
-              );
+                          ),
+                        );
+                        const f = select(
+                          r.lessThan(settings.beta),
+                          r.div(settings.beta).sub(1),
+                          attraction,
+                        );
+                        acceleration.addAssign(delta.mul(f.div(distance)));
+                      },
+                    );
+                    j.assign(next.element(j));
+                  },
+                );
+              });
             },
           );
         },
@@ -230,10 +198,7 @@ export function createGpuPhysics(particles, worldWidth, worldHeight) {
       If(mouseDistance.greaterThan(1).and(mouseDistance.lessThan(165)), () => {
         const falloff = float(1).sub(mouseDistance.div(165));
         acceleration.addAssign(
-          mouseDelta
-            .div(mouseDistance)
-            .mul(falloff.mul(falloff))
-            .mul(settings.mouseStrength),
+          mouseDelta.div(mouseDistance).mul(falloff.mul(falloff)).mul(settings.mouseStrength),
         );
       });
       integrateParticle(p, acceleration, destination);
@@ -247,9 +212,7 @@ export function createGpuPhysics(particles, worldWidth, worldHeight) {
   const resizePasses = states.map((source, i) =>
     Fn(() => {
       const particle = source.element(instanceIndex);
-      states[1 - i]
-        .element(instanceIndex)
-        .assign(vec4(particle.xy.mul(resizeScale), particle.zw));
+      states[1 - i].element(instanceIndex).assign(vec4(particle.xy.mul(resizeScale), particle.zw));
     })().compute(count),
   );
   let current = 0,
@@ -271,9 +234,7 @@ export function createGpuPhysics(particles, worldWidth, worldHeight) {
       settings.beta.value = options.beta;
       settings.force.value = options.force;
       settings.halfLife.value = options.halfLife;
-      settings.maxPerCell.value = options.approximate
-        ? Math.min(count, 64)
-        : count;
+      settings.maxPerCell.value = options.approximate ? Math.min(count, 64) : count;
     },
     setMatrix(matrix) {
       settings.matrix.array.fill(0);
@@ -284,10 +245,7 @@ export function createGpuPhysics(particles, worldWidth, worldHeight) {
       );
     },
     resize(renderer, width, height) {
-      resizeScale.value.set(
-        width / settings.world.value.x,
-        height / settings.world.value.y,
-      );
+      resizeScale.value.set(width / settings.world.value.x, height / settings.world.value.y);
       renderer.compute(resizePasses[current]);
       current = 1 - current;
       settings.world.value.set(width, height);
@@ -297,9 +255,7 @@ export function createGpuPhysics(particles, worldWidth, worldHeight) {
       settings.mouseStrength.value = strength;
     },
     async readParticles(renderer) {
-      const data = new Float32Array(
-        await renderer.getArrayBufferAsync(states[current].value),
-      );
+      const data = new Float32Array(await renderer.getArrayBufferAsync(states[current].value));
       return particles.map((particle, i) => ({
         x: data[i * 4],
         y: data[i * 4 + 1],
@@ -315,8 +271,7 @@ export function createGpuPhysics(particles, worldWidth, worldHeight) {
       typeBuffer.value.dispose();
       heads.value.dispose();
       next.value.dispose();
-      for (const pair of passes)
-        for (const pass of pair) if (pass !== clearGrid) pass.dispose();
+      for (const pair of passes) for (const pass of pair) if (pass !== clearGrid) pass.dispose();
       clearGrid.dispose();
       for (const pass of resizePasses) pass.dispose();
     },

@@ -1,0 +1,19 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@theme inline {
+  --color-background: #ffffff;
+  --color-foreground: #111827;
+  --color-primary: #e11e26;
+  --color-primary-foreground: #ffffff;
+  --color-muted: #e5e7eb;
+  --color-input: #cbd5e1;
+  --color-ring: #e11e26;
+  --color-border: #e2e8f0;
+  --color-secondary: #f1f5f9;
+  --color-secondary-foreground: #111827;
+  --color-accent: #f1f5f9;
+  --color-accent-foreground: #111827;
+  --color-destructive: #b91c1c;
+}

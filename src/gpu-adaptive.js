@@ -21,14 +21,7 @@ import {
 } from "three/tsl";
 
 // Hierarchical grid: traversal subdivides only populated, dense cells.
-export function createAdaptiveGrid(
-  states,
-  types,
-  integrateParticle,
-  settings,
-  count,
-  shortest,
-) {
+export function createAdaptiveGrid(states, types, integrateParticle, settings, count, shortest) {
   const depthLimit = 6,
     nodes = (4 ** (depthLimit + 1) - 1) / 3;
   const totals = instancedArray(nodes, "uint").toAtomic();
@@ -43,21 +36,14 @@ export function createAdaptiveGrid(
   const build = (source) =>
     Fn(() => {
       const p = source.element(instanceIndex);
-      const normalized = min(
-        max(p.xy.div(settings.world), vec2(0)),
-        vec2(0.999999),
-      );
+      const normalized = min(max(p.xy.div(settings.world), vec2(0)), vec2(0.999999));
       for (let level = 0; level <= depthLimit; level++) {
         const n = 1 << level,
           offset = (4 ** level - 1) / 3;
         const cx = uint(normalized.x.mul(n)),
           cy = uint(normalized.y.mul(n));
         const node = uint(offset).add(cy.mul(n)).add(cx);
-        const prev = atomicFunc(
-          "atomicExchange",
-          heads.element(node),
-          instanceIndex,
-        ).toVar();
+        const prev = atomicFunc("atomicExchange", heads.element(node), instanceIndex).toVar();
         atomicAdd(totals.element(node), uint(1));
         next.element(uint(level * count).add(instanceIndex)).assign(prev);
       }
@@ -76,17 +62,9 @@ export function createAdaptiveGrid(
         const r = distance.div(settings.radius);
         const coefficient = settings.matrix.element(pType.mul(12).add(type));
         const attraction = coefficient.mul(
-          float(1).sub(
-            abs(r.mul(2).sub(1).sub(settings.beta)).div(
-              float(1).sub(settings.beta),
-            ),
-          ),
+          float(1).sub(abs(r.mul(2).sub(1).sub(settings.beta)).div(float(1).sub(settings.beta))),
         );
-        const f = select(
-          r.lessThan(settings.beta),
-          r.div(settings.beta).sub(1),
-          attraction,
-        );
+        const f = select(r.lessThan(settings.beta), r.div(settings.beta).sub(1), attraction);
         acceleration.addAssign(delta.mul(f.mul(mass).div(distance)));
       };
       Loop(
@@ -108,16 +86,12 @@ export function createAdaptiveGrid(
           const size = settings.world.div(float(dim));
           const center = vec2(float(cx).add(0.5), float(cy).add(0.5)).mul(size);
           const deltaCenter = shortest(center.sub(p.xy));
-          const near = length(
-            max(abs(deltaCenter).sub(size.mul(0.5)), vec2(0)),
-          );
+          const near = length(max(abs(deltaCenter).sub(size.mul(0.5)), vec2(0)));
           const smallest = max(size.x, size.y)
             .lessThanEqual(settings.minCellSize)
             .or(level.equal(uint(depthLimit)));
           const leaf = population.lessThanEqual(uint(64)).or(smallest);
-          const inRange = population
-            .greaterThan(uint(0))
-            .and(near.lessThan(settings.radius));
+          const inRange = population.greaterThan(uint(0)).and(near.lessThan(settings.radius));
           const descend = inRange.and(leaf.not());
           If(inRange.and(leaf), () => {
             const j = atomicLoad(heads.element(node)).toVar();
@@ -147,12 +121,7 @@ export function createAdaptiveGrid(
                     .and(d2.greaterThanEqual(0.00001))
                     .and(d2.lessThan(settings.radius.mul(settings.radius))),
                   () => {
-                    applyForce(
-                      delta,
-                      sqrt(d2),
-                      uint(types.element(j).x),
-                      float(1),
-                    );
+                    applyForce(delta, sqrt(d2), uint(types.element(j).x), float(1));
                   },
                 );
                 j.assign(next.element(level.mul(uint(count)).add(j)));
@@ -199,10 +168,7 @@ export function createAdaptiveGrid(
       If(mouseDistance.greaterThan(1).and(mouseDistance.lessThan(165)), () => {
         const falloff = float(1).sub(mouseDistance.div(165));
         acceleration.addAssign(
-          mouseDelta
-            .div(mouseDistance)
-            .mul(falloff.mul(falloff))
-            .mul(settings.mouseStrength),
+          mouseDelta.div(mouseDistance).mul(falloff.mul(falloff)).mul(settings.mouseStrength),
         );
       });
       integrateParticle(p, acceleration, states[1 - states.indexOf(source)]);

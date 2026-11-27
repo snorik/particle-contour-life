@@ -17,7 +17,7 @@ Use `npm run build` to create a production build and `npm run preview` to serve 
 
 ## Simulation
 
-Particle physics, rendering, density fields, contours, and post-processing run on the GPU using Three.js, WebGPU, and TSL. Particle positions and types are passed directly from compute buffers to rendering. State is read back to the CPU only for operations such as exporting or changing particles.
+The interface uses React and shadcn/ui. React Three Fiber 10 alpha manages the WebGPU canvas, cameras, scene objects, and frame loop. GPU compute and the multi-pass render targets use Three.js and TSL inside that frame loop. Particle physics, rendering, density fields, contours, and post-processing run on the GPU. Particle positions and types are passed directly from compute buffers to rendering. State is read back to the CPU only for operations such as exporting or changing particles.
 
 The default neighbor search uses a periodic GPU grid with linked lists and no fixed cell capacity. Performance depends on the interaction radius and particle distribution; dense clusters can approach all-pairs complexity. The simulation supports up to 10,000 particles. **Fast dense cells**, enabled by default, limits checks to 64 particles per cell. This can improve performance but changes the forces and dynamics, and the selected particles depend on grid construction order.
 
@@ -27,6 +27,7 @@ Particles experience increasing repulsion near the edges; particles that cross a
 
 ## Performance and quality
 
+- **Microscope eyepiece**, enabled by default, adds a circular vignette and optical blur in contour modes. It can be switched off in the visualization settings.
 - Physics can run at 60, 120, or 240 steps per simulated second. Lower rates reduce work but change accuracy and dynamics.
 - Contour field resolution ranges from 33% to 100% of the window size. The field is smoothed and sampled with bilinear filtering.
 - Render resolution can be set independently to Auto, 1×, 1.5×, or the display's native resolution. Auto caps the pixel ratio at 1×.
