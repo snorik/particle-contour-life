@@ -121,9 +121,7 @@ export function createMaterials() {
     const fiber = float(1)
       .sub(smoothstep(0.008, 0.025, distance))
       .mul(step(0.83, grainSeed));
-    return vec3(0.32, 0.27, 0.21)
-      .mul(fiber)
-      .mul(water.uDebris);
+    return vec3(0.32, 0.27, 0.21).mul(fiber).mul(water.uDebris);
   });
   const grain = hash(floor(slideCoord.mul(840)))
     .sub(0.5)
