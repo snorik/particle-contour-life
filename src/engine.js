@@ -41,7 +41,7 @@ export function createEngine({
   const MAX_PARTICLES = 10000;
   const options = {
     types: 5,
-    count: 3000,
+    count: 5000,
     force: 1,
     range: 92,
     beta: 0.28,
@@ -63,7 +63,7 @@ export function createEngine({
     inner: 1,
     mode: "both",
     eyepiece: true,
-    vignette: 0.5,
+    vignette: 0.95,
   };
   let matrix = [],
     particles = [],
@@ -352,7 +352,7 @@ export function createEngine({
         options.approximate = !options.barnesHut && saved.approximate === true;
         options.mode = ["both", "contours", "particles"].includes(saved.mode) ? saved.mode : "both";
         options.eyepiece = typeof saved.eyepiece === "boolean" ? saved.eyepiece : true;
-        if (saved.vignette == null) options.vignette = 0.5;
+        if (saved.vignette == null) options.vignette = 0.95;
         matrix = m;
         makeMatrix();
         if (
@@ -363,7 +363,7 @@ export function createEngine({
           particles = restoreParticles(config.particles, n, worldW, worldH);
           options.count = particles.length;
         } else {
-          options.count = clamp(Math.round(Number(saved.count) || 8000), 100, MAX_PARTICLES);
+          options.count = clamp(Math.round(Number(saved.count) || 5000), 100, MAX_PARTICLES);
           particles = Array.from({ length: options.count }, randomParticle);
         }
         rebuildGeometry();

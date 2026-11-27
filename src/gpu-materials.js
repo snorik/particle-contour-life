@@ -4,6 +4,9 @@ import {
   If,
   abs,
   clamp,
+  cos,
+  dFdx,
+  dFdy,
   exp,
   float,
   floor,
@@ -14,7 +17,6 @@ import {
   min,
   mix,
   normalize,
-  pow,
   select,
   sin,
   smoothstep,
@@ -52,12 +54,11 @@ export function createMaterials() {
     depthTest: false,
     depthWrite: false,
   });
-  dots.uniforms = { uSize: uniform(5) };
+  dots.uniforms = { uSize: uniform(5), uOpacity: uniform(1) };
 
   const blur = make();
   const particleBackground = make();
-  particleBackground.uniforms = { uAspect: uniform(1) };
-  particleBackground.fragmentNode = vec4(vec3(0.97, 0.98, 1), 1);
+  const water = { uAspect: uniform(1), uDebris: uniform(0.45), uTime: uniform(0) };
   blur.uniforms = {
     uInput: texture(blank),
     uOld: texture(blank),
@@ -94,58 +95,73 @@ export function createMaterials() {
     uTypes: uniform(5),
     uIso: uniform(0.7),
     uFill: uniform(0.5),
-    uDebris: uniform(0.45),
     uInner: uniform(1),
-    uMode: uniform(0),
-    uTime: uniform(0),
-    uAspect: uniform(1),
+    ...water,
   };
   const d = display.uniforms;
   const hash = (p) => fract(sin(p.dot(vec2(127.1, 311.7))).mul(43758.5453));
-  display.fragmentNode = Fn(() => {
-    // A little suspended material gives the empty water the texture of a slide.
-    const waterCoord = coord.mul(vec2(d.uAspect, 1)).mul(112);
+  const slideCoord = coord.mul(vec2(water.uAspect, 1));
+  const debris = Fn(() => {
+    const waterCoord = slideCoord.mul(65);
     const grainCell = floor(waterCoord);
-    const grainLocal = fract(waterCoord).sub(
-      vec2(hash(grainCell.add(19.3)), hash(grainCell.add(71.8))),
-    );
     const grainSeed = hash(grainCell.add(3.7));
-    const fleck = float(1)
-      .sub(smoothstep(0.035, 0.11, length(grainLocal)))
-      .mul(step(0.91, grainSeed));
+    const phase = hash(grainCell.add(19.3)).mul(6.28318);
+    const drift = vec2(
+      sin(water.uTime.mul(0.24).add(phase)),
+      cos(water.uTime.mul(0.19).add(phase.mul(1.7))),
+    ).mul(0.11);
+    const local = fract(waterCoord).sub(vec2(0.5).add(drift));
+    const angle = phase.add(water.uTime.mul(mix(-0.22, 0.22, hash(grainCell.add(71.8)))));
+    const direction = vec2(cos(angle), sin(angle));
+    const along = local.dot(direction);
+    const across = local.dot(vec2(direction.y.negate(), direction.x));
+    const halfLength = mix(0.16, 0.29, hash(grainCell.add(39.4)));
+    const curve = along.mul(along).mul(mix(-2.2, 2.2, hash(grainCell.add(11.2))));
+    const distance = length(vec2(max(abs(along).sub(halfLength), 0), across.sub(curve)));
     const fiber = float(1)
-      .sub(smoothstep(0.035, 0.11, length(vec2(grainLocal.x.mul(2.3), grainLocal.y.mul(0.5)))))
-      .mul(step(0.975, grainSeed));
-    const fine = hash(floor(coord.mul(vec2(1100, 800))))
-      .sub(0.5)
-      .mul(0.009);
-    const col = vec3(0.97, 0.98, 1)
-      .sub(
-        vec3(0.2, 0.16, 0.11)
-          .mul(fleck.add(fiber.mul(0.7)))
-          .mul(d.uDebris),
-      )
-      .add(fine)
-      .toVar();
+      .sub(smoothstep(0.008, 0.025, distance))
+      .mul(step(0.83, grainSeed));
+    return vec3(0.32, 0.27, 0.21)
+      .mul(fiber)
+      .mul(water.uDebris);
+  });
+  const grain = hash(floor(slideCoord.mul(840)))
+    .sub(0.5)
+    .mul(0.024);
+  const illumination = float(0.65)
+    .add(sin(coord.x.mul(4).add(coord.y.mul(2))).mul(0.035))
+    .add(sin(coord.y.mul(18).sub(coord.x.mul(12))).mul(0.009))
+    .add(grain);
+  const background = vec3(1, 1.035, 0.97).mul(illumination);
+  particleBackground.fragmentNode = vec4(background.sub(debris()), 1);
+
+  display.fragmentNode = Fn(() => {
     const groups = [d.uField0.sample(coord), d.uField1.sample(coord), d.uField2.sample(coord)];
-    const lineLight = vec3(0).toVar();
+    const shadow = vec3(0).toVar();
+    const highlight = float(0).toVar();
     const topColor = vec3(0).toVar();
     const maxInside = float(0).toVar();
     const topD = float(0).toVar(),
       secondD = float(0).toVar();
+    const innerLevel = d.uIso.add(0.27);
     for (let i = 0; i < 12; i++) {
       If(d.uTypes.greaterThan(i + 0.5), () => {
         const density = groups[Math.floor(i / 4)]["rgba"[i % 4]];
         const color = d.uPalette.value[i];
-        const aa = max(fwidth(density).mul(1.5), 0.01);
+        const gradient = vec2(dFdx(density), dFdy(density));
+        const aa = max(abs(gradient.x).add(abs(gradient.y)), 0.008);
         const inside = smoothstep(d.uIso.sub(aa), d.uIso.add(aa), density);
         maxInside.assign(max(maxInside, inside));
-        const ew = max(fwidth(density).mul(0.85), 0.008);
-        const edge = (level, width) =>
-          exp(density.sub(d.uIso.mul(level)).div(width).pow(2).negate());
-        const main = edge(1, ew),
-          mid = edge(1.56, max(ew, 0.009));
-        lineLight.addAssign(color.mul(main.mul(0.85).add(d.uInner.mul(mid).mul(0.26))));
+        const edge = (level, width) => exp(density.sub(level).div(width).pow(2).negate());
+        // Opposite sides of the same membrane catch light and cast shade.
+        const light = clamp(gradient.dot(vec2(0.6, 0.8)).div(aa), -1, 1);
+        const rim = edge(d.uIso, aa.mul(1.25)).mul(float(0.36).sub(light.mul(0.3)));
+        const inner = edge(innerLevel, aa.mul(0.85)).mul(d.uInner).mul(0.1);
+        const absorption = mix(vec3(0.75, 0.81, 0.78), vec3(1).sub(color), 0.42);
+        shadow.addAssign(absorption.mul(rim.add(inner)));
+        highlight.addAssign(
+          edge(d.uIso.sub(aa.mul(1.7)), aa.mul(1.6)).mul(float(0.19).add(light.mul(0.18))),
+        );
         const isTop = density.greaterThan(topD),
           isSecond = density.greaterThan(secondD);
         secondD.assign(select(isTop, topD, select(isSecond, density, secondD)));
@@ -153,12 +169,12 @@ export function createMaterials() {
         topD.assign(select(isTop, density, topD));
       });
     }
-    // Each pixel belongs to the strongest field. Overlaps keep one pigment
-    // rather than multiplying or averaging the colours of different types.
-    const fillTint = mix(vec3(0.96, 0.97, 0.95), topColor, 0.58);
-    const fill = mix(col, fillTint, maxInside.mul(d.uFill).mul(0.52));
-    // Fine stipple appears only inside membranes, like translucent cell contents.
-    const cellGrid = coord.mul(vec2(d.uAspect, 1)).mul(265);
+    const thickness = max(topD.sub(d.uIso), 0);
+    const core = float(1).sub(exp(thickness.mul(-1.15)));
+    const fillTint = mix(vec3(0.23, 0.27, 0.25), topColor, 0.52);
+    const waterColor = background.sub(debris().mul(float(1).sub(maxInside)));
+    const fill = mix(waterColor, fillTint, maxInside.mul(d.uFill).mul(mix(0.27, 0.93, core)));
+    const cellGrid = slideCoord.mul(240).add(core.mul(1.1));
     const cellId = floor(cellGrid);
     const cellLocal = fract(cellGrid).sub(vec2(hash(cellId.add(11)), hash(cellId.add(59))));
     const granule = float(1)
@@ -166,22 +182,15 @@ export function createMaterials() {
       .mul(step(0.78, hash(cellId.add(23))))
       .mul(maxInside)
       .mul(d.uFill);
-    const texturedFill = mix(fill, topColor.mul(0.56).add(vec3(0.24)), granule.mul(0.24));
+    const texturedFill = mix(fill, fillTint, granule.mul(mix(0.2, 0.55, core)));
     const delta = topD.sub(secondD),
       interfaceWidth = max(fwidth(delta).mul(1.15), 0.012);
     const interfaceLine = float(1)
       .sub(smoothstep(0, interfaceWidth, abs(delta)))
       .mul(smoothstep(d.uIso.mul(0.75), d.uIso.mul(1.25), secondD));
-    lineLight.addAssign(topColor.mul(interfaceLine).mul(d.uInner).mul(0.55));
-    // Thin saturated ink over the translucent fills, with independent type edges.
-    const inkStrength = clamp(length(lineLight).mul(0.8), 0, 0.86);
-    const inkTint = clamp(lineLight.div(max(length(lineLight), 0.001)).mul(0.68), 0, 1);
-    const contoured = mix(texturedFill, inkTint, inkStrength);
-    col.assign(select(d.uMode.lessThan(1.5), contoured, col));
-    const noise = hash(floor(coord.mul(vec2(1200, 800))))
-      .sub(0.5)
-      .mul(0.006);
-    return vec4(pow(clamp(col.add(noise), 0, 1), vec3(0.9)), 1);
+    shadow.addAssign(vec3(0.11, 0.13, 0.12).mul(interfaceLine).mul(d.uInner));
+    const transmitted = texturedFill.mul(exp(shadow.mul(-1.8)));
+    return vec4(mix(transmitted, vec3(0.94, 0.98, 0.91), clamp(highlight, 0, 0.65)), 1);
   })();
 
   const optics = make();
@@ -190,30 +199,31 @@ export function createMaterials() {
     uAspect: uniform(1),
     uPixel: uniform(new THREE.Vector2(1, 1)),
     uEnabled: uniform(1),
-    uVignette: uniform(0.5),
+    uVignette: uniform(0.95),
   };
   const o = optics.uniforms,
     p = coord.sub(0.5).mul(vec2(o.uAspect, 1)).div(min(o.uAspect, 1));
   const radius = length(p),
-    edge = smoothstep(0.42, 0.69, radius);
-  const offset = normalize(p.add(0.00001)).mul(edge).mul(3).mul(o.uPixel);
+    edge = smoothstep(0.27, 0.86, radius);
+  const offset = normalize(p.add(0.00001)).mul(edge).mul(0.85).mul(o.uPixel);
   const center = o.uImage.sample(coord).rgb;
   const lensBlur = o.uImage
-    .sample(coord.add(vec2(o.uPixel.x.mul(3), 0)))
-    .rgb.add(o.uImage.sample(coord.sub(vec2(o.uPixel.x.mul(3), 0))).rgb)
-    .add(o.uImage.sample(coord.add(vec2(0, o.uPixel.y.mul(3)))).rgb)
-    .add(o.uImage.sample(coord.sub(vec2(0, o.uPixel.y.mul(3)))).rgb)
+    .sample(coord.add(vec2(o.uPixel.x.mul(1.5), 0)))
+    .rgb.add(o.uImage.sample(coord.sub(vec2(o.uPixel.x.mul(1.5), 0))).rgb)
+    .add(o.uImage.sample(coord.add(vec2(0, o.uPixel.y.mul(1.5)))).rgb)
+    .add(o.uImage.sample(coord.sub(vec2(0, o.uPixel.y.mul(1.5)))).rgb)
     .mul(0.25);
   const chroma = vec3(
     o.uImage.sample(coord.add(offset)).r,
     center.g,
     o.uImage.sample(coord.sub(offset)).b,
   );
-  const image = mix(chroma, lensBlur, edge.mul(0.55));
-  const shade = float(1)
-    .sub(edge.mul(0.16))
-    .mul(float(1).sub(smoothstep(0.68, 0.7, radius)));
-  const eyepiece = mix(image, mix(vec3(0.008, 0.009, 0.011), image, shade), o.uVignette);
+  const image = mix(chroma, lensBlur, edge.mul(0.65));
+  const shade = edge
+    .mul(0.38)
+    .add(smoothstep(0.68, 0.79, radius).mul(0.62))
+    .mul(o.uVignette);
+  const eyepiece = mix(image, vec3(0.017, 0.028, 0.025), shade);
   optics.fragmentNode = vec4(select(o.uEnabled.greaterThan(0.5), eyepiece, center), 1);
   return { field, dots, blur, display, optics, particleBackground };
 }
@@ -231,12 +241,18 @@ export function bindParticleFragments(field, dots, typeNode, tintNode) {
     float(lane.greaterThanEqual(1.5).and(lane.lessThan(2.5))),
     float(lane.greaterThanEqual(2.5).and(lane.lessThan(3.1))),
   ).mul(weight);
-  const r = uv().sub(0.5).length().mul(2);
+  const local = uv().sub(0.5).mul(2);
+  const r = length(local);
   const tint = varying(tintNode);
+  const glint = exp(
+    length(local.add(vec2(0.24, -0.24)))
+      .pow(2)
+      .mul(-10),
+  );
   dots.fragmentNode = vec4(
-    tint.mul(float(0.55).add(exp(r.mul(r).mul(-12)).mul(0.15))),
+    mix(tint.mul(0.46), vec3(0.84, 0.9, 0.81), glint.mul(0.64)),
     float(1)
-      .sub(smoothstep(0.24, 1, r))
-      .mul(0.93),
+      .sub(smoothstep(0.16, 1, r))
+      .mul(dots.uniforms.uOpacity),
   );
 }

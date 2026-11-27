@@ -17,7 +17,6 @@ export function createRenderPipeline({ renderer, scenes, cameras, materials }) {
     blur: blurMaterial,
     display: displayMaterial,
     optics: opticsMaterial,
-    particleBackground: particleBackgroundMaterial,
   } = materials;
   let getState;
   let rawTargets = [],
@@ -28,9 +27,9 @@ export function createRenderPipeline({ renderer, scenes, cameras, materials }) {
     specimenTarget;
   renderer.autoClear = false;
   renderer.toneMapping = THREE.NoToneMapping;
-  function target(w, h) {
+  function target(w, h, type = THREE.UnsignedByteType) {
     return new THREE.RenderTarget(w, h, {
-      type: THREE.UnsignedByteType,
+      type,
       format: THREE.RGBAFormat,
       minFilter: THREE.LinearFilter,
       magFilter: THREE.LinearFilter,
@@ -40,10 +39,13 @@ export function createRenderPipeline({ renderer, scenes, cameras, materials }) {
   }
   function render() {
     const { options, worldH, simTime } = getState();
+    displayMaterial.uniforms.uDebris.value = options.debris;
+    displayMaterial.uniforms.uTime.value = simTime;
+    dotsMaterial.uniforms.uSize.value = (3.4 * worldH) / window.innerHeight;
+    dotsMaterial.uniforms.uOpacity.value = options.mode === "particles" ? 0.93 : 0.52;
     if (options.mode === "particles") {
       renderer.setRenderTarget(specimenTarget);
       renderer.render(sceneParticleBackground, quadCamera);
-      dotsMaterial.uniforms.uSize.value = (3.4 * worldH) / window.innerHeight;
       renderer.render(sceneDots, worldCamera);
     } else {
       fieldMaterial.uniforms.uSize.value = Math.max(2, options.blob * 3);
@@ -70,18 +72,14 @@ export function createRenderPipeline({ renderer, scenes, cameras, materials }) {
       displayMaterial.uniforms.uField2.value = historyTargets[2].texture;
     }
     if (options.mode !== "particles") {
-      displayMaterial.uniforms.uTime.value = simTime;
       displayMaterial.uniforms.uIso.value = options.iso;
       displayMaterial.uniforms.uFill.value = options.fill;
-      displayMaterial.uniforms.uDebris.value = options.debris;
       displayMaterial.uniforms.uInner.value = options.inner;
-      displayMaterial.uniforms.uMode.value = options.mode === "particles" ? 2 : 0;
       renderer.setRenderTarget(specimenTarget);
       renderer.setClearColor(0xffffff, 1);
       renderer.clear(true, true, true);
       renderer.render(sceneDisplay, quadCamera);
       if (options.mode !== "contours") {
-        dotsMaterial.uniforms.uSize.value = (3.4 * worldH) / window.innerHeight;
         renderer.render(sceneDots, worldCamera);
       }
     }
@@ -95,9 +93,12 @@ export function createRenderPipeline({ renderer, scenes, cameras, materials }) {
     const fieldW = Math.max(1, Math.round(cw * options.fieldScale));
     const fieldH = Math.max(1, Math.round(ch * options.fieldScale));
     for (const rt of [...rawTargets, ...pingTargets, ...pongTargets]) rt.dispose();
-    rawTargets = Array.from({ length: 3 }, () => target(fieldW, fieldH));
-    pingTargets = Array.from({ length: 3 }, () => target(fieldW, fieldH));
-    pongTargets = Array.from({ length: 3 }, () => target(fieldW, fieldH));
+    // Preserve the density gradient where many particles overlap.
+    const densityTargets = () =>
+      Array.from({ length: 3 }, () => target(fieldW, fieldH, THREE.HalfFloatType));
+    rawTargets = densityTargets();
+    pingTargets = densityTargets();
+    pongTargets = densityTargets();
     historyTargets = [...pingTargets];
     hasHistory = false;
     blurMaterial.uniforms.uStep.value.set(1 / fieldW, 1 / fieldH);
@@ -110,7 +111,6 @@ export function createRenderPipeline({ renderer, scenes, cameras, materials }) {
     opticsMaterial.uniforms.uPixel.value.set(1 / width, 1 / height);
     resizeField(cw, ch);
     displayMaterial.uniforms.uAspect.value = cw / ch;
-    particleBackgroundMaterial.uniforms.uAspect.value = cw / ch;
   }
   return {
     configure: (readState) => {
