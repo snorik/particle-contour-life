@@ -41,13 +41,11 @@ export function createRenderPipeline({ renderer, scenes, cameras, materials }) {
   function render() {
     const { options, worldH, simTime } = getState();
     if (options.mode === "particles") {
-      renderer.setRenderTarget(null);
+      renderer.setRenderTarget(specimenTarget);
       renderer.render(sceneParticleBackground, quadCamera);
       dotsMaterial.uniforms.uSize.value = (3.4 * worldH) / window.innerHeight;
       renderer.render(sceneDots, worldCamera);
-      return;
-    }
-    if (options.mode !== "particles") {
+    } else {
       fieldMaterial.uniforms.uSize.value = Math.max(2, options.blob * 3);
       for (let group = 0; group < Math.ceil(options.types / 4); group++) {
         fieldMaterial.uniforms.uGroup.value = group;
@@ -71,22 +69,25 @@ export function createRenderPipeline({ renderer, scenes, cameras, materials }) {
       displayMaterial.uniforms.uField1.value = historyTargets[1].texture;
       displayMaterial.uniforms.uField2.value = historyTargets[2].texture;
     }
-    displayMaterial.uniforms.uTime.value = simTime;
-    displayMaterial.uniforms.uIso.value = options.iso;
-    displayMaterial.uniforms.uFill.value = options.fill;
-    displayMaterial.uniforms.uDebris.value = options.debris;
-    displayMaterial.uniforms.uInner.value = options.inner;
-    displayMaterial.uniforms.uMode.value = options.mode === "particles" ? 2 : 0;
-    renderer.setRenderTarget(specimenTarget);
-    renderer.setClearColor(0xffffff, 1);
-    renderer.clear(true, true, true);
-    renderer.render(sceneDisplay, quadCamera);
-    if (options.mode !== "contours") {
-      dotsMaterial.uniforms.uSize.value = (3.4 * worldH) / window.innerHeight;
-      renderer.render(sceneDots, worldCamera);
+    if (options.mode !== "particles") {
+      displayMaterial.uniforms.uTime.value = simTime;
+      displayMaterial.uniforms.uIso.value = options.iso;
+      displayMaterial.uniforms.uFill.value = options.fill;
+      displayMaterial.uniforms.uDebris.value = options.debris;
+      displayMaterial.uniforms.uInner.value = options.inner;
+      displayMaterial.uniforms.uMode.value = options.mode === "particles" ? 2 : 0;
+      renderer.setRenderTarget(specimenTarget);
+      renderer.setClearColor(0xffffff, 1);
+      renderer.clear(true, true, true);
+      renderer.render(sceneDisplay, quadCamera);
+      if (options.mode !== "contours") {
+        dotsMaterial.uniforms.uSize.value = (3.4 * worldH) / window.innerHeight;
+        renderer.render(sceneDots, worldCamera);
+      }
     }
     renderer.setRenderTarget(null);
     opticsMaterial.uniforms.uEnabled.value = options.eyepiece ? 1 : 0;
+    opticsMaterial.uniforms.uVignette.value = options.vignette;
     renderer.render(sceneOptics, quadCamera);
   }
   function resizeField(cw, ch) {

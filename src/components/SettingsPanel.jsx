@@ -20,6 +20,7 @@ const controls = [
   ["fill", "Fill intensity", 0, 1, 0.05],
   ["debris", "Water debris", 0, 1, 0.05],
   ["inner", "Internal membranes", 0, 2, 0.05],
+  ["vignette", "Vignette intensity", 0, 1, 0.05],
 ];
 export function SettingsPanel({
   open,
@@ -173,8 +174,9 @@ export function SettingsPanel({
         />
       </div>
       <p id="eyepiece-help" className="-mt-2 mb-5 text-xs leading-5 text-slate-500">
-        Adds a vignette and optical blur in contour modes.
+        Adds a vignette and optical blur in all display modes.
       </p>
+      {opts.eyepiece && range("vignette")}
       {["blob", "iso"].map(range)}
       <Choice
         id="renderScale"

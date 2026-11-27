@@ -190,6 +190,7 @@ export function createMaterials() {
     uAspect: uniform(1),
     uPixel: uniform(new THREE.Vector2(1, 1)),
     uEnabled: uniform(1),
+    uVignette: uniform(0.5),
   };
   const o = optics.uniforms,
     p = coord.sub(0.5).mul(vec2(o.uAspect, 1)).div(min(o.uAspect, 1));
@@ -208,12 +209,11 @@ export function createMaterials() {
     center.g,
     o.uImage.sample(coord.sub(offset)).b,
   );
-  const image = mix(chroma, lensBlur, edge.mul(0.55)).mul(float(1).sub(edge.mul(0.16)));
-  const eyepiece = mix(
-    vec3(0.008, 0.009, 0.011),
-    image,
-    float(1).sub(smoothstep(0.68, 0.7, radius)),
-  );
+  const image = mix(chroma, lensBlur, edge.mul(0.55));
+  const shade = float(1)
+    .sub(edge.mul(0.16))
+    .mul(float(1).sub(smoothstep(0.68, 0.7, radius)));
+  const eyepiece = mix(image, mix(vec3(0.008, 0.009, 0.011), image, shade), o.uVignette);
   optics.fragmentNode = vec4(select(o.uEnabled.greaterThan(0.5), eyepiece, center), 1);
   return { field, dots, blur, display, optics, particleBackground };
 }

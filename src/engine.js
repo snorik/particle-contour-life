@@ -20,6 +20,7 @@ const sliderIds = [
   "fill",
   "debris",
   "inner",
+  "vignette",
 ];
 import { createSimulationLoop } from "./simulation-loop.js";
 
@@ -62,6 +63,7 @@ export function createEngine({
     inner: 1,
     mode: "both",
     eyepiece: true,
+    vignette: 0.5,
   };
   let matrix = [],
     particles = [],
@@ -320,6 +322,7 @@ export function createEngine({
     fill: [0, 1],
     debris: [0, 1],
     inner: [0, 2],
+    vignette: [0, 1],
   };
   function importFile(file) {
     return queueEdit(async () => {
@@ -349,6 +352,7 @@ export function createEngine({
         options.approximate = !options.barnesHut && saved.approximate === true;
         options.mode = ["both", "contours", "particles"].includes(saved.mode) ? saved.mode : "both";
         options.eyepiece = typeof saved.eyepiece === "boolean" ? saved.eyepiece : true;
+        if (saved.vignette == null) options.vignette = 0.5;
         matrix = m;
         makeMatrix();
         if (
